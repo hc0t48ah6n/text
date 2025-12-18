@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>高機能文字数カウンター</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap');
+        body {
+            font-family: 'Noto Sans JP', sans-serif;
+        }
+        .stat-card {
+            transition: transform 0.2s;
+        }
+        .stat-card:hover {
+            transform: translateY(-2px);
+        }
+        /* 原稿用紙風の背景（飾り） */
+        .genko-bg {
+            background-image: radial-gradient(#e5e7eb 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800">
+
+    <div class="max-w-5xl mx-auto px-4 py-8">
+        <!-- Header -->
+        <header class="flex justify-between items-center mb-8">
+            <div>
+                <h1 class="text-3xl font-bold text-slate-900">文字数カウンター</h1>
+                <p class="text-slate-500 mt-1">リアルタイムで文章の統計を分析します。</p>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="downloadText()" class="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium hover:bg-slate-50 transition shadow-sm">
+                    保存 (.txt)
+                </button>
+                <button onclick="clearAll()" class="px-4 py-2 bg-red-50 text-red-600 rounded-lg text-sm font-medium hover:bg-red-100 transition">
+                    クリア
+                </button>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- Main Editor Area -->
+            <div class="lg:col-span-2 space-y-4">
+                <div class="relative bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <textarea id="main-textarea" 
+                        oninput="updateAnalytics()" 
+                        placeholder="ここに文章をペーストするか、入力を開始してください..." 
+                        class="w-full h-[500px] p-6 text-lg leading-relaxed outline-none resize-none bg-transparent relative z-10"></textarea>
+                    <div class="absolute inset-0 genko-bg opacity-30 pointer-events-none"></div>
+                </div>
+                
+                <!-- Quick Tools -->
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="modifyText('trim')" class="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 rounded text-xs font-bold">空白を除去</button>
+                    <button onclick="modifyText('lines')" class="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 rounded text-xs font-bold">空行を除去</button>
+                    <button onclick="copyToClipboard()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-bold ml-auto">クリップボードにコピー</button>
+                </div>
+            </div>
+
+            <!-- Analytics Sidebar -->
+            <div class="space-y-6">
+                <!-- Count Stats -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">基本統計</h3>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="stat-card p-4 bg-blue-50 rounded-xl">
+                            <p class="text-xs text-blue-600 mb-1">文字数 (込)</p>
+                            <p id="stat-total" class="text-2xl font-bold">0</p>
+                        </div>
+                        <div class="stat-card p-4 bg-emerald-50 rounded-xl">
+                            <p class="text-xs text-emerald-600 mb-1">文字数 (無)</p>
+                            <p id="stat-no-space" class="text-2xl font-bold">0</p>
+                        </div>
+                        <div class="stat-card p-4 bg-purple-50 rounded-xl">
+                            <p class="text-xs text-purple-600 mb-1">行数</p>
+                            <p id="stat-lines" class="text-2xl font-bold">0</p>
+                        </div>
+                        <div class="stat-card p-4 bg-orange-50 rounded-xl">
+                            <p class="text-xs text-orange-600 mb-1">原稿用紙</p>
+                            <p id="stat-pages" class="text-2xl font-bold">0<span class="text-sm font-normal ml-1">枚</span></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Speech Estimation -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">読み上げ時間（目安）</h3>
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm">ゆっくり (300字/分)</span>
+                            <span id="time-slow" class="font-mono font-bold">00:00</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm">標準的 (400字/分)</span>
+                            <span id="time-normal" class="font-mono font-bold text-blue-600">00:00</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm">早口 (500字/分)</span>
+                            <span id="time-fast" class="font-mono font-bold">00:00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reading Info -->
+                <div class="bg-slate-900 text-white p-6 rounded-2xl shadow-lg">
+                    <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">読了時間の目安</h3>
+                    <div class="text-center py-2">
+                        <p id="read-time" class="text-3xl font-bold mb-1">0<span class="text-lg font-normal ml-1">秒</span></p>
+                        <p class="text-xs text-slate-400">黙読 (約600字/分) で計算</p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="fixed bottom-8 left-1/2 -translate-x-1/2 bg-slate-800 text-white px-6 py-3 rounded-full shadow-2xl opacity-0 transition-opacity pointer-events-none">
+        メッセージ
+    </div>
+
+    <script>
+        const textArea = document.getElementById('main-textarea');
+        
+        function updateAnalytics() {
+            const text = textArea.value;
+            
+            // Basic Counts
+            const total = text.length;
+            const noSpace = text.replace(/\s+/g, '').length;
+            const lines = text ? text.split('\n').length : 0;
+            const pages = Math.ceil(total / 400);
+
+            document.getElementById('stat-total').innerText = total.toLocaleString();
+            document.getElementById('stat-no-space').innerText = noSpace.toLocaleString();
+            document.getElementById('stat-lines').innerText = lines.toLocaleString();
+            document.getElementById('stat-pages').innerHTML = `${pages}<span class="text-sm font-normal ml-1">枚</span>`;
+
+            // Time Calculation helper
+            const formatTime = (seconds) => {
+                const m = Math.floor(seconds / 60);
+                const s = seconds % 60;
+                return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+            };
+
+            // Speech Times
+            document.getElementById('time-slow').innerText = formatTime(Math.ceil(total / (300/60)));
+            document.getElementById('time-normal').innerText = formatTime(Math.ceil(total / (400/60)));
+            document.getElementById('time-fast').innerText = formatTime(Math.ceil(total / (500/60)));
+
+            // Reading Time
+            const readSeconds = Math.ceil(total / (600/60));
+            if (readSeconds < 60) {
+                document.getElementById('read-time').innerHTML = `${readSeconds}<span class="text-lg font-normal ml-1">秒</span>`;
+            } else {
+                document.getElementById('read-time').innerHTML = `${Math.floor(readSeconds/60)}<span class="text-lg font-normal ml-1">分</span>${readSeconds%60}<span class="text-lg font-normal ml-1">秒</span>`;
+            }
+
+            // Auto-save to local storage
+            localStorage.setItem('counter_backup', text);
+        }
+
+        function modifyText(type) {
+            let text = textArea.value;
+            if (type === 'trim') {
+                text = text.replace(/\s+/g, '');
+            } else if (type === 'lines') {
+                text = text.split('\n').filter(line => line.trim() !== '').join('\n');
+            }
+            textArea.value = text;
+            updateAnalytics();
+            showToast("テキストを加工しました");
+        }
+
+        function clearAll() {
+            if (confirm("入力した内容をすべて消去しますか？")) {
+                textArea.value = '';
+                updateAnalytics();
+            }
+        }
+
+        function copyToClipboard() {
+            textArea.select();
+            document.execCommand('copy');
+            showToast("クリップボードにコピーしました");
+        }
+
+        function downloadText() {
+            const text = textArea.value;
+            if (!text) return;
+            const blob = new Blob([text], {type: 'text/plain'});
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `text_backup_${new Date().getTime()}.txt`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.innerText = msg;
+            toast.style.opacity = '1';
+            setTimeout(() => {
+                toast.style.opacity = '0';
+            }, 2000);
+        }
+
+        // Restore on load
+        window.onload = () => {
+            const saved = localStorage.getItem('counter_backup');
+            if (saved) {
+                textArea.value = saved;
+                updateAnalytics();
+            }
+        };
+    </script>
+</body>
+</html>
